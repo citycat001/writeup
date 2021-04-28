@@ -1,0 +1,22 @@
+随机数问题，使用系统时间初始化，可以在现有时间上+1来提取随机数。
+
+
+import random
+import socket
+import time
+
+secret = random.Random()
+
+for i in range(0, 512):
+    secret.seed(int(time.time() + 1))
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('d863d9413c9825a3.247ctf.com', 50196))
+    s.recv(1024)
+    s.sendall(str(secret.random()).encode())
+    res = str(s.recv(1024))
+    if 'Nope' not in res:
+        print(res)
+        break
+    print(res)
+    s.close()
+
