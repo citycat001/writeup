@@ -1,0 +1,14 @@
+使用工具bruteforce-salted-openssl。使用默认算法aes-256-cbc，hash sha256。
+
+#bruteforce-salted-openssl -t 50 -f /usr/share/wordlists/rockyou.txt -d sha256 encrypted_flag.enc -1 
+Warning: using dictionary mode, ignoring options -b, -e, -l, -m and -s.
+
+Tried passwords: 14319222
+Tried passwords per second: 842307.176471
+Last tried password: (aj7792sdsri)
+
+Password candidate: (algorithm)crypto
+
+#openssl aes-256-cbc -d -in encrypted_flag.enc -out flag -k "(algorithm)crypto" 
+*** WARNING : deprecated key derivation used.
+Using -iter or -pbkdf2 would be better.
