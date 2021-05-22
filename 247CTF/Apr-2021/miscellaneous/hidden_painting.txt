@@ -1,0 +1,16 @@
+需要将下载的txt文件中的点显示出来组成图片。
+
+import matplotlib.pyplot as plt
+
+with open("./secret_map.txt") as f:
+	content = f.readlines()
+
+content = [x.strip().split(' ') for x in content]
+x, y = zip(*content)								#将坐标组合切分成x轴y轴数据
+x = [int(a, 16) for a in x]
+y = [int(a, 16) for a in y]
+
+plt.plot(x, y, 'ro')
+plt.axis([0, 200, 0, 2600])
+plt.axis('equal')									#坐标轴按同等比例正常显示图片
+plt.show()
