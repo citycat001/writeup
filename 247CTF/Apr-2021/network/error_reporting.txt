@@ -1,0 +1,15 @@
+打开pcap文件发现ICMP里传输的是GIF文件，利用python scapy.all模块提取pcap文件里的包载荷，拼装成图片文件，flag就在文件里。
+
+from scapy.all import IP, ICMP, rdpcap
+
+FILE = 'error_reporting.pcap'
+
+pcap = rdpcap(FILE)
+packets = [p for p in pcap if ICMP in p]
+packets = [p for p in packets if p[IP].src == '192.168.10.113']
+
+# take type flag of each packet
+with open('mystery.file', 'wb+') as f:
+	for p in packets:
+		data = bytes(p.payload[ICMP])
+		f.write(data[8:])
